@@ -1,25 +1,77 @@
 name: Docker Build and Publish
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      target_repository:
+        description: "Target repository, e.g. Housing-Intelligence/hi-app-terraforms"
+        required: true
+        type: string
+
+      docker_directory:
+        description: "Docker directory, e.g. airflow/docker"
+        required: true
+        type: string
+
+      aws_region:
+        description: "AWS region, e.g. us-east-2"
+        required: true
+        type: string
+
+      image_name:
+        description: "Docker image name, e.g. airflow"
+        required: true
+        type: string
+
+      image_tags:
+        description: "Docker image tags, comma-separated, e.g. latest,3.3.1,abc123"
+        required: true
+        type: string
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write
+      contents: read
+
     steps:
-      - uses: actions/checkout@v4
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-      - name: Login to registry
-        uses: docker/login-action@v2
+
+      - name: Checkout application repo
+        uses: actions/checkout@v4
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: ${{ inputs.target_repository }}
+          path: app
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ inputs.aws_region }}
+
+      - name: Login to ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
       - name: Build and push
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          push: true
-          tags: ${{ secrets.DOCKER_IMAGE }}
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          IMAGE_NAME: ${{ inputs.image_name }}
+          IMAGE_TAGS: ${{ inputs.image_tags }}
+        run: |
+          TAG_ARGS=""
+
+          IFS=',' read -ra TAG_ARRAY <<< "$IMAGE_TAGS"
+
+          for TAG in "${TAG_ARRAY[@]}"; do
+            TAG="$(echo "$TAG" | xargs)"
+            TAG_ARGS="$TAG_ARGS -t ${REGISTRY}/${IMAGE_NAME}:${TAG}"
+          done
+
+          docker buildx build \
+            --platform linux/amd64 \
+            -f app/${{ inputs.docker_directory }}/Dockerfile \
+            ${TAG_ARGS} \
+            --push \
+            app
