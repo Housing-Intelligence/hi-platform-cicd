@@ -8,8 +8,8 @@ on:
         required: true
         type: string
 
-      docker_directory:
-        description: "Docker directory, e.g. airflow/docker"
+      app_directory:
+        description: "Application directory, e.g. airflow"
         required: true
         type: string
 
@@ -71,7 +71,7 @@ jobs:
 
           docker buildx build \
             --platform linux/amd64 \
-            -f app/${{ inputs.docker_directory }}/Dockerfile \
+            -f app/${{ inputs.app_directory }}/docker/Dockerfile \
             ${TAG_ARGS} \
             --push \
-            app
+            app/${{ inputs.app_directory }}
