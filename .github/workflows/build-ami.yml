@@ -72,6 +72,7 @@ jobs:
           packer build \
             -var="aws_region=${{ inputs.aws_region }}" \
             -var="ami_name=${{ inputs.ami_name }}" \
+            -var="subnet_id=${{ inputs.subnet_id }}" \
             .
       
 
