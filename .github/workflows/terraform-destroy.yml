@@ -100,16 +100,14 @@ jobs:
           if [ -z "$TEMPLATE_NAME" ]; then
             echo "No template specified."
             echo "Using upstream parameters directly."
-
             cp upstream.tfvars.json terraform.tfvars.json
-
           else
             if [ -z "$INFRA_NAME" ]; then
               echo "Error: infra_name is required when template_name is provided."
               exit 1
             fi
 
-            TEMPLATE_PATH="../../templates/${INFRA_NAME}/${TEMPLATE_NAME}.json"
+            TEMPLATE_PATH="${GITHUB_WORKSPACE}/templates/${INFRA_NAME}/${TEMPLATE_NAME}.json"
 
             echo "Template path: $TEMPLATE_PATH"
 
@@ -124,8 +122,6 @@ jobs:
             echo "Template found."
             echo "Merging template parameters with upstream parameters..."
 
-            # Template = default values
-            # Upstream parameters = override values
             jq -s '.[0] * .[1]' \
               "$TEMPLATE_PATH" \
               upstream.tfvars.json \
