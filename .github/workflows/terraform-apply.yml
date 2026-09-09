@@ -180,9 +180,15 @@ jobs:
       - name: Terraform Init
         working-directory: target/${{ inputs.terraform_directory }}
         run: |
+          backend_suffix = ${{ inputs.environment }}/terraform.tfstate"
+
+          if [[inputs.target_repository == "Housing-Intelligence/hi-app-terraforms" ]]; then
+            backend_suffix = ${{ inputs.target_repository }}/${{ inputs.environment }}/terraform.tfstate"
+          fi
+
           terraform init \
             -backend-config="bucket=${{ vars.S3_STATE_BUCKET }}" \
-            -backend-config="key=${{ inputs.target_repository }}/${{ inputs.environment }}/terraform.tfstate" \
+            -backend-config="key=\"${{ inputs.target_repository }}/${{ backend_suffix }}\"" \
             -backend-config="region=${{ vars.AWS_REGION }}"
 
 

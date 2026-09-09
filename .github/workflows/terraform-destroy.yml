@@ -106,7 +106,6 @@ jobs:
               echo "Error: infra_name is required when template_name is provided."
               exit 1
             fi
-
             TEMPLATE_PATH="${GITHUB_WORKSPACE}/templates/${INFRA_NAME}/${TEMPLATE_NAME}.json"
 
             echo "Template path: $TEMPLATE_PATH"
@@ -179,11 +178,32 @@ jobs:
       # Terraform Init
       - name: Terraform Init
         working-directory: target/${{ inputs.terraform_directory }}
+        env:
+          TARGET_REPOSITORY: ${{ inputs.target_repository }}
+          ENVIRONMENT: ${{ inputs.environment }}
+          PARAMETERS_JSON: ${{ inputs.parameters_json }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          STATE_BUCKET: ${{ vars.AWS_S3_BUCKET_REMOTE_STATE_NAME }}
         run: |
+          set -e
+          BACKEND_KEY="${TARGET_REPOSITORY}/${ENVIRONMENT}/terraform.tfstate"
+
+          # Use workspace to separate their Terraform states.
+          if [[ "$TARGET_REPOSITORY" == "Housing-Intelligence/hi-app-terraforms" ]]; then
+            WORKSPACE=$(echo "$PARAMETERS_JSON" | jq -r '.workspace')
+
+            if [[ -z "$WORKSPACE" || "$WORKSPACE" == "null" ]]; then
+              echo "Error: workspace is required for hi-app-terraforms."
+              exit 1
+            fi
+
+            BACKEND_KEY="${TARGET_REPOSITORY}/${ENVIRONMENT}/${WORKSPACE}/terraform.tfstate"
+          fi
+
           terraform init \
-            -backend-config="bucket=${{ vars.S3_STATE_BUCKET }}" \
-            -backend-config="key=${{ inputs.target_repository }}/${{ inputs.environment }}/terraform.tfstate" \
-            -backend-config="region=${{ vars.AWS_REGION }}"
+            -backend-config="bucket=${STATE_BUCKET}" \
+            -backend-config="key=${BACKEND_KEY}" \
+            -backend-config="region=${AWS_REGION}"
 
       # Terraform Destroy
       - name: Terraform Destroy
