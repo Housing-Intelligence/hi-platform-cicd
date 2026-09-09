@@ -1,4 +1,4 @@
-name: AMI Build
+name: AIM Build
 
 on:
   workflow_dispatch:
@@ -17,7 +17,7 @@ on:
         description: "AMI name"
         required: true
         type: string
-
+      
       environment:
         description: "Environment, e.g. dev or prod"
         required: true
@@ -26,7 +26,7 @@ on:
 jobs:
   packer-build:
     runs-on: ubuntu-latest
-
+    
     environment:
       name: ${{ inputs.environment }}
 
@@ -67,6 +67,7 @@ jobs:
           packer validate \
             -var="aws_region=${{ vars.AWS_REGION }}" \
             -var="ami_name=${{ inputs.ami_name }}" \
+            -var="subnet_id=${{ vars.AWS_PUBLIC_SUBNET_1 }}" \
             .
 
       - name: Packer Build
@@ -77,3 +78,5 @@ jobs:
             -var="ami_name=${{ inputs.ami_name }}" \
             -var="subnet_id=${{ vars.AWS_PUBLIC_SUBNET_1 }}" \
             .
+  
+
