@@ -22,6 +22,11 @@ on:
         description: "AMI name"
         required: true
         type: string
+      
+      subnet_id:
+        description: "Subnet ID for the AMI build"
+        required: true
+        type: string
 
 jobs:
   packer-build:
