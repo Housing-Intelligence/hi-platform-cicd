@@ -1,4 +1,4 @@
-name: Terraform Apply
+name: Run Terraform
 
 on:
   workflow_dispatch:
@@ -37,9 +37,15 @@ on:
         description: "Template name, e.g. dev-mintest"
         required: false
         type: string
+      
+      operation:
+        description: "Terraform operation to perform, e.g. apply or destroy"
+        default: "apply"
+        required: true
+        type: string
 
 jobs:
-  terraform-apply:
+  terraform-deploy:
     runs-on: ubuntu-latest
 
     environment:
@@ -179,29 +185,40 @@ jobs:
       # Terraform Init
       - name: Terraform Init
         working-directory: target/${{ inputs.terraform_directory }}
+        env:
+          PARAMETERS_JSON: ${{ inputs.parameters_json }}
         run: |
-          backend_suffix = ${{ inputs.environment }}/terraform.tfstate"
-
-          if [[inputs.target_repository == "Housing-Intelligence/hi-app-terraforms" ]]; then
-            backend_suffix = ${{ inputs.target_repository }}/${{ inputs.environment }}/terraform.tfstate"
+          backend_key="${{ inputs.target_repository }}/${{ inputs.environment }}/terraform.tfstate"
+          
+          if [[ "${{ inputs.target_repository }}" == "Housing-Intelligence/hi-app-terraforms" ]]; then
+            workspace=$(echo "$PARAMETERS_JSON" | jq -r '.workspace')
+            backend_key="${{ inputs.target_repository }}/${{ inputs.environment }}/${{ inputs.infra_name}}/${workspace}/terraform.tfstate"
           fi
 
           terraform init \
             -backend-config="bucket=${{ vars.S3_STATE_BUCKET }}" \
-            -backend-config="key=\"${{ inputs.target_repository }}/${{ backend_suffix }}\"" \
+            -backend-config="key=${backend_key}" \
             -backend-config="region=${{ vars.AWS_REGION }}"
 
-
+      - name: Terraform destroy
+        if: ${{ inputs.operation == 'destroy' }}
+        working-directory: target/${{ inputs.terraform_directory }}
+        run: |
+          terraform destroy \
+            -auto-approve \
+            -var-file="terraform.tfvars.json"
+        
       # Terraform Plan
       - name: Terraform Plan
+        if: ${{ inputs.operation == 'apply' }}
         working-directory: target/${{ inputs.terraform_directory }}
         run: |
           terraform plan \
             -var-file="terraform.tfvars.json"
 
-
       # Terraform Apply
       - name: Terraform Apply
+        if: ${{ inputs.operation == 'apply' }}
         working-directory: target/${{ inputs.terraform_directory }}
         run: |
           terraform apply \
