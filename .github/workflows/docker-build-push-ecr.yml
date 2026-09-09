@@ -3,6 +3,11 @@ name: Docker Build and Publish
 on:
   workflow_dispatch:
     inputs:
+      environment:
+        description: "Deployment environment"
+        required: true
+        type: string
+
       target_repository:
         description: "Target repository, e.g. Housing-Intelligence/hi-app-terraforms"
         required: true
@@ -10,11 +15,6 @@ on:
 
       app_directory:
         description: "Application directory, e.g. airflow"
-        required: true
-        type: string
-
-      aws_region:
-        description: "AWS region, e.g. us-east-2"
         required: true
         type: string
 
@@ -32,6 +32,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    environment:
+      name: ${{ inputs.environment }}
+
     permissions:
       id-token: write
       contents: read
@@ -48,7 +51,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ inputs.aws_region }}
+          aws-region: ${{ vars.AWS_REGION }}
 
       - name: Login to ECR
         id: ecr

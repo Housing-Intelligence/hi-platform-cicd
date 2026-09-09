@@ -3,32 +3,34 @@ name: Create ECR Repository
 on:
   workflow_dispatch:
     inputs:
+      environment:
+        description: "Environment, e.g. dev or prod"
+        required: true
+        type: string
+
       ecr_repository_name:
         description: "ECR repository name"
         required: true
         type: string
-      aws_region:
-        description: "AWS region, e.g. us-east-2"
-        required: false
-        type: string
-        default: "us-east-2"
 
 jobs:
   create-ecr:
     runs-on: ubuntu-latest
+
+    environment:
+      name: ${{ inputs.environment }}
 
     permissions:
       id-token: write
       contents: read
 
     steps:
-
       # Configure AWS credentials
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ inputs.aws_region }}
+          aws-region: ${{ vars.AWS_REGION }}
 
       # Check AWS identity
       - name: Check AWS identity
@@ -39,5 +41,5 @@ jobs:
         run: |
           aws ecr create-repository \
             --repository-name "${{ inputs.ecr_repository_name }}" \
-            --region "${{ inputs.aws_region }}" \
+            --region "${{ vars.AWS_REGION }}" \
             || echo "Error creating ECR repository. It may already exist."

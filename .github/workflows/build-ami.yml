@@ -1,4 +1,4 @@
-name: AIM Build
+name: AMI Build
 
 on:
   workflow_dispatch:
@@ -13,24 +13,22 @@ on:
         required: true
         type: string
 
-      aws_region:
-        description: "AWS region"
-        required: true
-        type: string
-
       ami_name:
         description: "AMI name"
         required: true
         type: string
-      
-      subnet_id:
-        description: "Subnet ID for the AMI build"
+
+      environment:
+        description: "Environment, e.g. dev or prod"
         required: true
         type: string
 
 jobs:
   packer-build:
     runs-on: ubuntu-latest
+
+    environment:
+      name: ${{ inputs.environment }}
 
     permissions:
       id-token: write
@@ -48,7 +46,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ inputs.aws_region }}
+          aws-region: ${{ vars.AWS_REGION }}
 
       - name: Check AWS identity
         run: aws sts get-caller-identity
@@ -67,7 +65,7 @@ jobs:
         working-directory: target/${{ inputs.packer_directory }}
         run: |
           packer validate \
-            -var="aws_region=${{ inputs.aws_region }}" \
+            -var="aws_region=${{ vars.AWS_REGION }}" \
             -var="ami_name=${{ inputs.ami_name }}" \
             .
 
@@ -75,9 +73,7 @@ jobs:
         working-directory: target/${{ inputs.packer_directory }}
         run: |
           packer build \
-            -var="aws_region=${{ inputs.aws_region }}" \
+            -var="aws_region=${{ vars.AWS_REGION }}" \
             -var="ami_name=${{ inputs.ami_name }}" \
-            -var="subnet_id=${{ inputs.subnet_id }}" \
+            -var="subnet_id=${{ vars.AWS_PUBLIC_SUBNET_1 }}" \
             .
-      
-

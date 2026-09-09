@@ -3,6 +3,11 @@ name: Terraform Apply
 on:
   workflow_dispatch:
     inputs:
+      environment:
+        description: "Environment, e.g. dev or prod"
+        required: true
+        type: string
+      
       # Target infrastructure repository
       target_repository:
         description: "Infrastructure repository, e.g. Housing-Intelligence/hi-backend"
@@ -12,17 +17,6 @@ on:
       # Terraform directory inside target repository
       terraform_directory:
         description: "Terraform directory, e.g. backend/terraform"
-        required: true
-        type: string
-      
-      aws_region:
-        description: "AWS region, e.g. us-east-2"
-        required: true
-        type: string
-      
-      # Terraform environment, used to separate Terraform remote states.
-      environment:
-        description: "Environment, e.g. dev or prod"
         required: true
         type: string
 
@@ -45,8 +39,11 @@ on:
         type: string
 
 jobs:
-  terraform-apply:
+  terraform-destroy:
     runs-on: ubuntu-latest
+
+    environment:
+      name: ${{ inputs.environment }}
 
     permissions:
       id-token: write
@@ -76,17 +73,25 @@ jobs:
       - name: Prepare Terraform variables
         working-directory: target/${{ inputs.terraform_directory }}
         env:
+          PARAMETERS_JSON: ${{ inputs.parameters_json }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          ENVIRONMENT: ${{ inputs.environment }}
+
+          VPC_ID: ${{ vars.AWS_VPC_ID }}
+          PRIVATE_SUBNET_1: ${{ vars.AWS_PRIVATE_SUBNET_1 }}
+          PRIVATE_SUBNET_2: ${{ vars.AWS_PRIVATE_SUBNET_2 }}
+          PUBLIC_SUBNET_1: ${{ vars.AWS_PUBLIC_SUBNET_1 }}
+          PUBLIC_SUBNET_2: ${{ vars.AWS_PUBLIC_SUBNET_2 }}
+
           INFRA_NAME: ${{ inputs.infra_name }}
           TEMPLATE_NAME: ${{ inputs.template_name }}
-          PARAMETERS_JSON: ${{ inputs.parameters_json }}
-          AWS_REGION: ${{ inputs.aws_region }}
-          ENVIRONMENT: ${{ inputs.environment }}
+
         run: |
           set -e
 
           echo "Preparing Terraform variables..."
 
-          # Validate JSON format
+          # Validate upstream JSON
           echo "$PARAMETERS_JSON" | jq empty
 
           echo "$PARAMETERS_JSON" > upstream.tfvars.json
@@ -98,7 +103,6 @@ jobs:
 
             cp upstream.tfvars.json terraform.tfvars.json
 
-          # Template
           else
             if [ -z "$INFRA_NAME" ]; then
               echo "Error: infra_name is required when template_name is provided."
@@ -115,7 +119,6 @@ jobs:
               exit 1
             fi
 
-            # Validate template JSON
             jq empty "$TEMPLATE_PATH"
 
             echo "Template found."
@@ -129,27 +132,41 @@ jobs:
               > terraform.tfvars.json
           fi
 
+          # Add platform-controlled parameters
           jq \
             --arg aws_region "$AWS_REGION" \
             --arg environment "$ENVIRONMENT" \
+            --arg vpc_id "$VPC_ID" \
+            --arg private_subnet_1 "$PRIVATE_SUBNET_1" \
+            --arg private_subnet_2 "$PRIVATE_SUBNET_2" \
+            --arg public_subnet_1 "$PUBLIC_SUBNET_1" \
+            --arg public_subnet_2 "$PUBLIC_SUBNET_2" \
             '. + {
               aws_region: $aws_region,
-              environment: $environment
+              environment: $environment,
+              vpc_id: $vpc_id,
+              private_subnet_ids: [
+                $private_subnet_1,
+                $private_subnet_2
+              ],
+              public_subnet_ids: [
+                $public_subnet_1,
+                $public_subnet_2
+              ]
             }' \
             terraform.tfvars.json \
             > terraform.tfvars.json.tmp
 
           mv terraform.tfvars.json.tmp terraform.tfvars.json
 
-          echo "Final Terraform variables:"
-          cat terraform.tfvars.json
+          echo "Terraform variables prepared."
 
       # Configure AWS credentials
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ inputs.aws_region }}
+          aws-region: ${{ vars.AWS_REGION }}
 
 
       # Check AWS identity
@@ -168,9 +185,9 @@ jobs:
         working-directory: target/${{ inputs.terraform_directory }}
         run: |
           terraform init \
-            -backend-config="bucket=${{ secrets.AWS_S3_BUCKET_REMOTE_STATE_NAME }}" \
+            -backend-config="bucket=${{ vars.S3_STATE_BUCKET }}" \
             -backend-config="key=${{ inputs.target_repository }}/${{ inputs.environment }}/terraform.tfstate" \
-            -backend-config="region=${{ inputs.aws_region }}"
+            -backend-config="region=${{ vars.AWS_REGION }}"
 
 
       # Terraform Plan
